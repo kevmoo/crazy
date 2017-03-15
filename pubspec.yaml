@@ -1,0 +1,14 @@
+name: crazy
+
+environment:
+  sdk: '>=2.0.0-dev.40.0 <2.0.0'
+
+dependencies:
+  analyzer: ^0.31.0
+  gviz: ^0.2.0
+  logging: ^0.11.3+1
+  path: ^1.4.1
+  source_span: ^1.4.0
+
+#dev_dependencies:
+#  test: ^0.12.0
