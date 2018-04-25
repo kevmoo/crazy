@@ -55,7 +55,11 @@ class SearchResult {
       this.isResolved, this.isQualified)
       : span = new SourceFile.fromString(enclosingElement.source.contents.data,
                 url: enclosingElement.source.uri)
-            .span(offset, offset + length);
+            .span(offset, offset + length) {
+    if (!isResolved) {
+      throw new UnsupportedError('must be resolved!');
+    }
+  }
 
   @override
   String toString() {

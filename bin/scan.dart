@@ -7,9 +7,7 @@ import 'package:gviz/gviz.dart';
 
 import 'package:path/path.dart' as p;
 
-final _hosts = new Set<String>();
-
-bool cool(String thing) {
+bool _cool(String thing) {
   var uri = Uri.parse(thing);
 
   if (uri.isScheme('package') &&
@@ -25,11 +23,7 @@ main(List<String> args) async {
 
   var scanner = new LibraryScanner(pubEnv, args.single, false);
 
-  var result = await scanner.scanDependencyGraph((ie, uri) {
-    if (_hosts.add(uri.pathSegments.first)) {
-      io.stderr.writeln([uri.pathSegments.first, _hosts.length]);
-    }
-
+  var result = await scanner.scanDependencyGraph((uri) {
     return uri.scheme == 'package' && uri.pathSegments.first == 'build_runner';
   });
 
@@ -42,19 +36,23 @@ main(List<String> args) async {
     var references = entry.value;
 
     for (var thing in references.references) {
-      if (cool(thing)) {
+      if (_cool(thing)) {
         graph.addEdge(lib, thing);
       }
     }
 
     if (references.details.isNotEmpty) {
-      references.details.forEach((k, usages) {
-        var allUsages = usages.map((u) => u.content).toSet();
+      io.stderr.writeln('$lib');
 
-        for (var usage in allUsages) {
-          graph.addEdge(lib, usage);
-        }
-      });
+      var allUsages = references.details.values
+          .expand((u) => u)
+          .map((u) => u.content)
+          .toSet();
+
+      for (var usage in allUsages) {
+        io.stderr.writeln('  $usage');
+        graph.addEdge(lib, usage);
+      }
     }
   }
 

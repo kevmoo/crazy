@@ -25,8 +25,7 @@ import 'import_element_references_visitor.dart';
 import 'sdk_env.dart';
 import 'utils.dart';
 
-typedef ImportPredicate = bool Function(
-    ImportElement element, Uri normalizedUri);
+typedef ImportPredicate = bool Function(Uri normalizedUri);
 
 class LibraryScanner {
   final String packageName;
@@ -233,10 +232,6 @@ class LibraryScanner {
       var usages = details[k.uri] = <Usage>[];
 
       for (var result in v) {
-        stderr.writeln([
-          result.enclosingElement.runtimeType.toString().padRight(30),
-          result.enclosingElement
-        ].join('\t'));
         usages.add(new Usage.fromSpan(result.span));
       }
     });
@@ -263,8 +258,8 @@ class LibraryScanner {
     return null;
   }
 
-  Uri _coolThing(ImportElement ie) {
-    var uri = ie.importedLibrary.source.uri;
+  Uri _uriForLibraryElement(LibraryElement element) {
+    var uri = element.source.uri;
 
     if (uri.isScheme('file')) {
       var filePath = p.fromUri(uri);
@@ -291,8 +286,8 @@ class LibraryScanner {
       LibraryElement lib, ImportPredicate predicate) {
     var results = <ImportElement, List<SearchResult>>{};
 
-    for (var importElement
-        in lib.imports.where((ie) => predicate(ie, _coolThing(ie)))) {
+    for (var importElement in lib.imports
+        .where((ie) => predicate(_uriForLibraryElement(ie.importedLibrary)))) {
       var items = results[importElement] = <SearchResult>[];
 
       var compUnit = _context.resolveCompilationUnit(lib.source, lib);
@@ -351,9 +346,9 @@ class Usage {
   final String content;
   final int offset, column, line;
 
-  Usage(this.content, this.offset, this.line, this.column);
+  Usage._(this.content, this.offset, this.line, this.column);
 
-  factory Usage.fromSpan(FileSpan span) => new Usage(
+  factory Usage.fromSpan(FileSpan span) => new Usage._(
       span.text, span.start.offset, span.start.line, span.start.column);
 
   String toString() => "$content @ $line,$column";

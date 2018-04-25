@@ -8,6 +8,7 @@ dependencies:
   gviz: ^0.2.0
   logging: ^0.11.3+1
   path: ^1.4.1
+  source_gen:
   source_span: ^1.4.0
 
 #dev_dependencies:
