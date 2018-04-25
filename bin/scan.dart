@@ -42,7 +42,7 @@ main(List<String> args) async {
   var things = graph.flagConnectedComponents();
   io.stderr.writeln(things.length);
 
-  print(graph.createGviz(graphStyle: new ScanStyle()));
+  //print(graph.createGviz(graphStyle: new ScanStyle()));
 }
 
 class ScanStyle extends GraphStyle {
