@@ -313,8 +313,7 @@ class LibraryScanner {
     var uri = _normalizeUri(element.source.uri);
 
     if (!(uri.isScheme('dart') || uri.isScheme('package'))) {
-      throw new UnsupportedError(
-          'Should only ever get package: and dart: uris here: $uri');
+      stderr.writeln('Should only ever get package: and dart: uris here: $uri');
     }
 
     return uri;
