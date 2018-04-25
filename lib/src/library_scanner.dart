@@ -228,7 +228,7 @@ class LibraryScanner {
     refs.remove('dart:core');
 
     var details = <String, List<Usage>>{};
-    var items = searchLib(lib, predicate);
+    var items = _searchLib(lib, predicate);
     items.forEach((k, v) {
       var usages = details[k.uri] = <Usage>[];
 
@@ -245,7 +245,18 @@ class LibraryScanner {
   }
 
   LibraryElement _getLibraryElement(String path) {
-    Source source = new FileBasedSource(new JavaFile(path));
+    Source source;
+    var sources = _context.getSourcesWithFullName(path);
+    if (sources.isEmpty) {
+      source = new FileBasedSource(new JavaFile(path));
+    } else {
+      if (sources.length == 1) {
+        source = sources.single;
+      } else {
+        source = sources.singleWhere((s) => s.uriKind == UriKind.PACKAGE_URI);
+      }
+    }
+
     if (_context.computeKindOf(source) == SourceKind.LIBRARY) {
       return _context.computeLibraryElement(source);
     }
@@ -262,8 +273,7 @@ class LibraryScanner {
         if (p.isWithin(entry.value, filePath)) {
           uri = new Uri(
               scheme: 'package',
-              host: entry.key,
-              path: p.relative(filePath, from: entry.value));
+              path: p.join(entry.key, p.relative(filePath, from: entry.value)));
           break;
         }
       }
@@ -277,7 +287,7 @@ class LibraryScanner {
     return uri;
   }
 
-  Map<ImportElement, List<SearchResult>> searchLib(
+  Map<ImportElement, List<SearchResult>> _searchLib(
       LibraryElement lib, ImportPredicate predicate) {
     var results = <ImportElement, List<SearchResult>>{};
 

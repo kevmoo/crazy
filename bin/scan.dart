@@ -7,16 +7,33 @@ import 'package:gviz/gviz.dart';
 
 import 'package:path/path.dart' as p;
 
+final _hosts = new Set<String>();
+
+bool cool(String thing) {
+  var uri = Uri.parse(thing);
+
+  if (uri.isScheme('package') &&
+      (const ['build'].any((pkg) => uri.pathSegments.first.startsWith(pkg)))) {
+    return true;
+  }
+  //io.stderr.writeln([false, thing]);
+  return false;
+}
+
 main(List<String> args) async {
   var pubEnv = new PubEnvironment();
 
   var scanner = new LibraryScanner(pubEnv, args.single, false);
 
   var result = await scanner.scanDependencyGraph((ie, uri) {
-    return uri.toString().startsWith('package:source_span');
+    if (_hosts.add(uri.pathSegments.first)) {
+      io.stderr.writeln([uri.pathSegments.first, _hosts.length]);
+    }
+
+    return uri.scheme == 'package' && uri.pathSegments.first == 'build_runner';
   });
 
-  print(result.length);
+  io.stderr.writeln(result.length);
 
   var graph = new Graph();
 
@@ -25,7 +42,9 @@ main(List<String> args) async {
     var references = entry.value;
 
     for (var thing in references.references) {
-      graph.addEdge(lib, thing);
+      if (cool(thing)) {
+        graph.addEdge(lib, thing);
+      }
     }
 
     if (references.details.isNotEmpty) {
@@ -47,6 +66,17 @@ main(List<String> args) async {
 
 class ScanStyle extends GraphStyle {
   @override
+  Map<String, String> styleForEdge(Edge edge) {
+    var style = <String, String>{};
+    if (edge.flags.isNotEmpty) {
+      //io.stderr.writeln([edge.from, edge.to, edge.flags]);
+      style['color'] = 'green';
+    }
+
+    return style;
+  }
+
+  @override
   Map<String, String> styleForNode(Object node) {
     var map = super.styleForNode(node);
 
@@ -55,7 +85,7 @@ class ScanStyle extends GraphStyle {
         var uri = Uri.parse(node);
         if (uri.scheme == 'package') {
           map['label'] =
-              "${uri.pathSegments.first}\n${p.joinAll(uri.pathSegments.skip(1))}";
+              "pkg:${uri.pathSegments.first}\n${p.joinAll(uri.pathSegments.skip(1))}";
         } else if (!uri.hasScheme) {
           // Then this should be a member of `dart:io`
           map['shape'] = 'polygon';
