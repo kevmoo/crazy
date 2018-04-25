@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io' as io;
 
 import 'package:crazy/src/library_scanner.dart';
@@ -24,10 +25,13 @@ main(List<String> args) async {
   var scanner = new LibraryScanner(pubEnv, args.single, false);
 
   var result = await scanner.scanDependencyGraph((uri) {
-    return uri.scheme == 'package' && uri.pathSegments.first == 'build_runner';
+    return uri.scheme == 'package' &&
+        uri.pathSegments.first == scanner.packageName;
   });
 
   io.stderr.writeln(result.length);
+
+  var allThings = <String, Map<String, int>>{};
 
   var graph = new Graph();
 
@@ -41,25 +45,40 @@ main(List<String> args) async {
       }
     }
 
-    if (references.details.isNotEmpty) {
-      io.stderr.writeln('$lib');
+    for (var u in references.details.values.expand((u) => u)) {
+      var childMap =
+          allThings.putIfAbsent(u.source.toString(), () => <String, int>{});
 
-      var allUsages = references.details.values
-          .expand((u) => u)
-          .map((u) => u.content)
-          .toSet();
-
-      for (var usage in allUsages) {
-        io.stderr.writeln('  $usage');
-        graph.addEdge(lib, usage);
-      }
+      childMap[u.content] = (childMap[u.content] ?? 0) + 1;
     }
   }
 
-  var things = graph.flagConnectedComponents();
-  io.stderr.writeln(things.length);
+  //var things = graph.flagConnectedComponents();
+  //io.stderr.writeln(things.length);
 
+  //print(const JsonEncoder.withIndent(' ').convert(allThings));
   //print(graph.createGviz(graphStyle: new ScanStyle()));
+
+  var unused = <String, List<String>>{};
+
+  for (var entry in scanner.foundMembers.entries) {
+    var usedMap = allThings[entry.key];
+
+    if (usedMap == null) {
+      unused[entry.key] = null;
+      continue;
+    }
+
+    var unusedMembers = entry.value.toList()
+      ..removeWhere(usedMap.keys.contains)
+      ..sort();
+
+    if (unusedMembers.isNotEmpty) {
+      unused[entry.key] = unusedMembers;
+    }
+  }
+
+  print(const JsonEncoder.withIndent(' ').convert(unused));
 }
 
 class ScanStyle extends GraphStyle {

@@ -40,19 +40,19 @@ class SearchResult {
   /// The deep most element that contains this result.
   final Element enclosingElement;
 
+  /// Defines the URI where this referenced item is defined.
+  final Uri sourceUri;
+
   /// The kind of the [enclosingElement] usage.
   final SearchResultKind kind;
 
   /// Is `true` if a field or a method is using with a qualifier.
   final bool isResolved;
 
-  /// Is `true` if the result is a resolved reference to [enclosingElement].
-  final bool isQualified;
-
   final SourceSpan span;
 
   SearchResult._(this.enclosingElement, this.kind, int offset, int length,
-      this.isResolved, this.isQualified)
+      this.isResolved, this.sourceUri)
       : span = new SourceFile.fromString(enclosingElement.source.contents.data,
                 url: enclosingElement.source.uri)
             .span(offset, offset + length) {
@@ -74,25 +74,23 @@ class SearchResult {
     buffer.write(span.length);
     buffer.write(", isResolved=");
     buffer.write(isResolved);
-    buffer.write(", isQualified=");
-    buffer.write(isQualified);
     buffer.write(")");
     return buffer.toString();
   }
 }
 
-/// Visitor that adds [SearchResult]s for references to the [importElement].
+/// Visitor that adds [SearchResult]s for references to the [_importElement].
 class ImportElementReferencesVisitor extends RecursiveAstVisitor {
   final List<SearchResult> results = <SearchResult>[];
 
-  final ImportElement importElement;
-  final CompilationUnitElement enclosingUnitElement;
+  final ImportElement _importElement;
+  final CompilationUnitElement _enclosingUnitElement;
 
   Set<Element> importedElements;
 
   ImportElementReferencesVisitor(
-      ImportElement element, this.enclosingUnitElement)
-      : importElement = element {
+      ImportElement element, this._enclosingUnitElement)
+      : _importElement = element {
     importedElements = new NamespaceBuilder()
         .createImportNamespaceForDirective(element)
         .definedNames
@@ -111,37 +109,40 @@ class ImportElementReferencesVisitor extends RecursiveAstVisitor {
     if (node.inDeclarationContext()) {
       return;
     }
-    if (importElement.prefix != null) {
-      if (node.staticElement == importElement.prefix) {
+    if (_importElement.prefix != null) {
+      if (node.staticElement == _importElement.prefix) {
         var parent = node.parent;
         if (parent is PrefixedIdentifier && parent.prefix == node) {
           if (importedElements.contains(parent.staticElement)) {
-            _addResultForPrefix(node, parent.identifier);
+            _addResultForPrefix(node, parent.identifier, parent.staticElement);
             return;
           }
         }
         if (parent is MethodInvocation && parent.target == node) {
           if (importedElements.contains(parent.methodName.staticElement)) {
-            _addResultForPrefix(node, parent.methodName);
+            _addResultForPrefix(
+                node, parent.methodName, parent.methodName.staticElement);
             return;
           }
         }
       }
     } else {
       if (importedElements.contains(node.staticElement)) {
-        _addResult(node.offset, node.length);
+        _addResult(node.offset, node.length, node.staticElement);
         return;
       }
     }
   }
 
-  void _addResult(int offset, int length) {
-    var enclosingElement = _getEnclosingElement(enclosingUnitElement, offset);
+  void _addResult(int offset, int length, Element staticElement) {
+    var enclosingElement = _getEnclosingElement(_enclosingUnitElement, offset);
+
     results.add(new SearchResult._(enclosingElement, SearchResultKind.REFERENCE,
-        offset, length, true, false));
+        offset, length, true, staticElement.source.uri));
   }
 
-  void _addResultForPrefix(SimpleIdentifier prefixNode, AstNode nextNode) {
-    _addResult(nextNode.offset, nextNode.length);
+  void _addResultForPrefix(
+      SimpleIdentifier prefixNode, AstNode nextNode, Element staticElement) {
+    _addResult(nextNode.offset, nextNode.length, staticElement);
   }
 }

@@ -19,6 +19,7 @@ import 'package:analyzer/src/generated/source.dart';
 import 'package:analyzer/src/generated/source_io.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:source_gen/source_gen.dart';
 import 'package:source_span/source_span.dart';
 
 import 'import_element_references_visitor.dart';
@@ -34,6 +35,8 @@ class LibraryScanner {
   final AnalysisContext _context;
   final Map<String, String> _dependencyUris;
   final _cachedLibs = new HashMap<String, LibraryReferences>();
+
+  final Map<String, Set<String>> foundMembers = <String, Set<String>>{};
 
   LibraryScanner._(this.packageName, this._packagePath, this._packageResolver,
       this._context, this._dependencyUris);
@@ -73,9 +76,14 @@ class LibraryScanner {
 
     var dependencyUris = <String, String>{};
     var packageNames = <String>[];
+
     packageMap.forEach((k, v) {
       if (v.any((f) => p.isWithin(packagePath, f.path))) {
-        packageNames.add(k);
+        if (v.length == 1 && v.single.path == p.join(packagePath, 'lib')) {
+          packageNames.add(k);
+        } else {
+          stderr.writeln('Skipping $v');
+        }
       }
 
       dependencyUris[k] = v.single.path;
@@ -232,11 +240,37 @@ class LibraryScanner {
       var usages = details[k.uri] = <Usage>[];
 
       for (var result in v) {
-        usages.add(new Usage.fromSpan(result.span));
+        usages.add(
+            new Usage._fromSpan(result.span, _normalizeUri(result.sourceUri)));
       }
     });
 
-    return new LibraryReferences(new List<String>.unmodifiable(refs), details);
+    var libRef =
+        new LibraryReferences(new List<String>.unmodifiable(refs), details);
+
+    Uri libUri;
+    try {
+      libUri = _uriForLibraryElement(lib);
+    } on UnsupportedError {
+      // nevermind
+    }
+    if (libUri != null && predicate(libUri)) {
+      stderr.writeln(libUri);
+      var reader = new LibraryReader(lib);
+
+      for (var e in reader.allElements) {
+        if (e.isPrivate) {
+          continue;
+        }
+
+        var set = foundMembers.putIfAbsent(
+            libUri.toString(), () => new Set<String>());
+
+        set.add(e.name);
+      }
+    }
+
+    return libRef;
   }
 
   LibraryElement _getLibraryElement(String path) {
@@ -258,9 +292,7 @@ class LibraryScanner {
     return null;
   }
 
-  Uri _uriForLibraryElement(LibraryElement element) {
-    var uri = element.source.uri;
-
+  Uri _normalizeUri(Uri uri) {
     if (uri.isScheme('file')) {
       var filePath = p.fromUri(uri);
 
@@ -273,6 +305,12 @@ class LibraryScanner {
         }
       }
     }
+
+    return uri;
+  }
+
+  Uri _uriForLibraryElement(LibraryElement element) {
+    var uri = _normalizeUri(element.source.uri);
 
     if (!(uri.isScheme('dart') || uri.isScheme('package'))) {
       throw new UnsupportedError(
@@ -345,11 +383,12 @@ class LibraryReferences {
 class Usage {
   final String content;
   final int offset, column, line;
+  final Uri source;
 
-  Usage._(this.content, this.offset, this.line, this.column);
+  Usage._(this.content, this.offset, this.line, this.column, this.source);
 
-  factory Usage.fromSpan(FileSpan span) => new Usage._(
-      span.text, span.start.offset, span.start.line, span.start.column);
+  factory Usage._fromSpan(FileSpan span, Uri source) => new Usage._(
+      span.text, span.start.offset, span.start.line, span.start.column, source);
 
   String toString() => "$content @ $line,$column";
 }
